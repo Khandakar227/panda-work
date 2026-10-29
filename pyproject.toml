@@ -1,0 +1,30 @@
+[build-system]
+requires = ["setuptools>=64"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "pandawork"
+version = "0.1.0"
+description = "A harness where an LLM agent operates a simulated Franka Panda through tools: tiers of perception, scripted oracles, calibration faults, recording and replay, batches and analysis."
+requires-python = ">=3.10"
+license = {text = "MIT"}
+readme = "README.md"
+dependencies = [
+    "mujoco==3.14.0",
+    "numpy==2.2.6",
+    "pillow>=10,<12",
+    "pydantic>=2.7,<3",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=8,<9"]
+agent = ["claude-agent-sdk>=0.2.123,<0.3"]
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+# A sourced ROS 2 (Jazzy) puts its Python 3.12 packages on PYTHONPATH; their pytest plugins
+# fail to import in this venv, so keep them out.
+addopts = "-p no:launch_pytest -p no:launch_ros -p no:launch_testing"
