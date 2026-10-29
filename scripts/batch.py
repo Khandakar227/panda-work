@@ -34,6 +34,18 @@ def seeds(spec: str) -> list[int]:
     return out
 
 
+def parse_exclude(specs: list[str]) -> set[tuple[str, str]]:
+    """`task:fault` pairs for --exclude; unknown names or another shape are an error."""
+    out = set()
+    for spec in specs:
+        task, sep, fault = spec.partition(":")
+        if not sep or task not in TASKS or fault not in FAULTS:
+            raise argparse.ArgumentTypeError(
+                f"--exclude expects TASK:FAULT with a known task and fault, got {spec!r}")
+        out.add((task, fault))
+    return out
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     sub = parser.add_subparsers(dest="cmd", required=True)
@@ -45,6 +57,8 @@ def main():
     run.add_argument("--seeds", default="0-9", help="e.g. 0-9 or 0,3,5-7")
     run.add_argument("--faults", nargs="+", default=["none"], choices=list(FAULTS),
                      help="fault presets to cross with the grid (core.faults)")
+    run.add_argument("--exclude", nargs="*", default=[], metavar="TASK:FAULT",
+                     help="skip these task x fault cells, e.g. stack:stiff_j4")
     run.add_argument("--warn", choices=["no", "mild", "yes", "both", "all"], default="no",
                      help="tell the agent the robot may be miscalibrated")
     run.add_argument("--model", default=DEFAULT_MODEL)
@@ -64,7 +78,8 @@ def main():
     if args.cmd == "run":
         warn = {"no": ("none",), "mild": ("mild",), "yes": ("full",), "both": ("none", "full"),
                 "all": ("none", "mild", "full")}[args.warn]
-        jobs = grid(args.tasks, [Tier(t) for t in args.tiers], seeds(args.seeds), args.faults, warn)
+        jobs = grid(args.tasks, [Tier(t) for t in args.tiers], seeds(args.seeds), args.faults, warn,
+                    exclude=parse_exclude(args.exclude))
         config = AgentConfig(model=args.model, effort=args.effort, max_usd=args.max_usd)
         watch = Watch(args.realtime) if args.watch else None
         run_grid(run_dir, jobs, args.agent, config, args.max_total_usd, report=lambda s: print(s, flush=True),

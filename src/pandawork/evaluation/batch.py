@@ -13,7 +13,7 @@ import shutil
 import time
 from dataclasses import dataclass, replace
 from pathlib import Path
-from typing import Callable, Iterator
+from typing import Collection, Callable, Iterator
 
 from ..agent.prompt import warn_level
 from ..agent import AgentConfig, run_agent_episode
@@ -25,12 +25,6 @@ from ..tiers import Tier
 from ..tools import BudgetLimits
 
 AGENTS = ("claude", "oracle")
-# The keypad start posture (elbow at -145 deg) lies outside the stiff elbow's range, and the
-# drawer handle and two of the three stack cubes lie closer to the base than the stiff elbow can
-# reach (grid run 1: 0/9 each in every tier, oracle too), so those cells would measure reach,
-# not self-knowledge. stiff_j4 is run on pick_place and press_button only.
-EXCLUDED_CELLS = {("press_key", "stiff_j4"), ("type_code", "stiff_j4"),
-                  ("open_drawer", "stiff_j4"), ("stack", "stiff_j4")}
 RESET_MARGIN_S = 60.0  # wait this much past the reported reset before resuming
 
 
@@ -55,10 +49,12 @@ WARN_SUFFIX = {"none": "", "full": "-warn", "mild": "-warnmild"}
 
 
 def grid(tasks: list[str], tiers: list[Tier], seeds: list[int], faults=("none",),
-         warn=("none",)) -> list[Job]:
-    """Tier-major order (cache stays warm), then prompt variant, fault, task, seed."""
+         warn=("none",), exclude: Collection[tuple[str, str]] = ()) -> list[Job]:
+    """Tier-major order (cache stays warm), then prompt variant, fault, task, seed.
+    `exclude`: (task, fault) cells to leave out, e.g. a fault that makes a task unreachable."""
+    exclude = set(exclude)
     return [Job(t, tier, s, f, w) for tier in tiers for w in warn for f in faults for t in tasks
-            for s in seeds if (t, f) not in EXCLUDED_CELLS]
+            for s in seeds if (t, f) not in exclude]
 
 
 def set_aside(folder: Path) -> bool:

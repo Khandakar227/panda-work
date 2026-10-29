@@ -1,4 +1,4 @@
-"""The fault study's plumbing: faults and the warning as grid axes, reports by fault, and
+"""Batch plumbing for fault experiments: faults and the warning as grid axes, reports by fault, and
 pausing a batch when the subscription's usage limit is hit."""
 import json
 import time
@@ -10,12 +10,26 @@ from pandawork.evaluation.batch import Job, grid, run_grid
 from pandawork.tiers import Tier
 
 
-def test_job_names_and_the_excluded_cell():
+def test_job_names_and_explicit_exclusions():
     assert Job("reach", Tier.PRIVILEGED, 3).name == "reach-privileged-s3"  # as before faults
     assert Job("reach", Tier.REALISTIC, 3, "stiff_j4", True).name == "reach-realistic-f_stiff_j4-warn-s3"
     jobs = grid(["press_key", "reach"], [Tier.REALISTIC], [0], faults=("none", "stiff_j4"))
     assert [j.name for j in jobs] == ["press_key-realistic-s0", "reach-realistic-s0",
-                                      "reach-realistic-f_stiff_j4-s0"]  # press_key x stiff_j4 excluded
+                                      "press_key-realistic-f_stiff_j4-s0", "reach-realistic-f_stiff_j4-s0"]
+    jobs = grid(["press_key", "reach"], [Tier.REALISTIC], [0], faults=("none", "stiff_j4"),
+                exclude={("press_key", "stiff_j4")})
+    assert [j.name for j in jobs] == ["press_key-realistic-s0", "reach-realistic-s0", "reach-realistic-f_stiff_j4-s0"]
+
+
+def test_exclude_option_parses_task_fault_pairs_and_rejects_bad_shapes():
+    import argparse, importlib.util, pathlib
+    import pytest
+    spec = importlib.util.spec_from_file_location("batch_cli", pathlib.Path(__file__).parents[1] / "scripts" / "batch.py")
+    cli = importlib.util.module_from_spec(spec); spec.loader.exec_module(cli)
+    assert cli.parse_exclude(["stack:stiff_j4", "open_drawer:stiff_j4"]) == {("stack", "stiff_j4"), ("open_drawer", "stiff_j4")}
+    for bad in (["stack"], ["stack:nope"], ["nope:stiff_j4"]):
+        with pytest.raises(argparse.ArgumentTypeError):
+            cli.parse_exclude(bad)
 
 
 def test_oracle_batch_records_the_fault_and_the_report_groups_by_it(tmp_path):

@@ -156,11 +156,3 @@ def test_label_leaks_flags_agent_text_naming_the_fault(tmp_path):
     (clean / "meta.json").write_text((folder / "meta.json").read_text())
     (clean / "events.jsonl").write_text(ev("The top camera looks off.") + "\n")
     assert label_leaks(clean) == []
-
-
-def test_stiff_j4_runs_only_where_reachable():
-    from pandawork.evaluation.batch import EXCLUDED_CELLS
-    for task in ("press_key", "open_drawer", "stack"):
-        assert (task, "stiff_j4") in EXCLUDED_CELLS
-    for task in ("pick_place", "press_button"):
-        assert (task, "stiff_j4") not in EXCLUDED_CELLS
