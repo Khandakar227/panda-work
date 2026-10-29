@@ -154,3 +154,16 @@ def test_record_with_video_flag_renders_a_file(tmp_path, monkeypatch):
                                       "--video", "--camera", "side"])
     cli.main()
     assert called == {"folder": tmp_path / "ep", "camera": "side"}
+
+
+def test_record_video_without_ffmpeg_exits_with_one_line_before_recording(tmp_path, monkeypatch):
+    """No ffmpeg: the CLI says so in one line and does not spend a recording first."""
+    import importlib.util, pathlib, sys
+    spec = importlib.util.spec_from_file_location("episodes_cli2", pathlib.Path(__file__).parents[1] / "scripts" / "episodes.py")
+    cli = importlib.util.module_from_spec(spec); spec.loader.exec_module(cli)
+    monkeypatch.setattr(shutil, "which", lambda name: None)
+    monkeypatch.setattr(sys, "argv", ["episodes.py", "record", "reach", "--seed", "0", "--out", str(tmp_path / "ep"), "--video"])
+    with pytest.raises(SystemExit) as exc:
+        cli.main()
+    assert "ffmpeg not found on PATH" in str(exc.value)
+    assert not (tmp_path / "ep").exists()

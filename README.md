@@ -93,7 +93,7 @@ never verifies".
 | | `gripper` | open or close; after closing, says whether something is held |
 | | `wait` | let things settle |
 | predict | `check_reachable` | can the gripper get there, from the self-model |
-| | `simulate` | run a plan on a twin world first, **not in vision_only** (and under a fault the twin is the *believed* body) |
+| | `simulate` | run a plan on a twin world first, **privileged only** (and under a fault the twin is the *believed* body) |
 | meta | `get_task`, `done` | the instruction and object names; end the episode with a claim |
 
 `vision_only` keeps `get_robot_state`, `look`, `gripper`, `move_to`, `move_relative`, `wait`,
@@ -124,7 +124,7 @@ outside the privileged tier, and open fingers press the neighbouring key.
 ## Faults
 
 An optional layer for robustness experiments. A fault patches the plant only; *hidden* faults are
-concealed by the tool reports, *revealed* faults show up in them. Thirteen presets ship, from a
+concealed by the tool reports, *revealed* faults show up in them. Twelve presets ship, from a
 2° encoder offset to a jammed gripper; `python scripts/faults.py` prints them with descriptions,
 `--watch <preset>` shows the oracle misled by one. The realistic and vision-only tiers never see
 plant truth (`tests/test_faults.py` audits every tool output), and the fault is recorded in the

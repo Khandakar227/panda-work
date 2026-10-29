@@ -1,6 +1,8 @@
 """Batch plumbing for fault experiments: faults and the warning as grid axes, reports by fault, and
 pausing a batch when the subscription's usage limit is hit."""
 import json
+
+import pytest
 import time
 
 from pandawork.agent.prompt import system_prompt
@@ -83,3 +85,14 @@ def test_warning_arms_are_three_levels_and_old_booleans_still_work():
     assert Job("reach", Tier.REALISTIC, 0, "none", True).name == "reach-realistic-warn-s0"
     names = [j.name for j in grid(["reach"], [Tier.REALISTIC], [0], warn=("none", "mild", "full"))]
     assert names == ["reach-realistic-s0", "reach-realistic-warnmild-s0", "reach-realistic-warn-s0"]
+
+
+def test_malformed_exclude_is_a_usage_error_not_a_traceback(monkeypatch, capsys):
+    import importlib.util, pathlib, sys
+    spec = importlib.util.spec_from_file_location("batch_cli2", pathlib.Path(__file__).parents[1] / "scripts" / "batch.py")
+    cli = importlib.util.module_from_spec(spec); spec.loader.exec_module(cli)
+    monkeypatch.setattr(sys, "argv", ["batch.py", "run", "x", "--exclude", "stack"])
+    with pytest.raises(SystemExit) as exc:
+        cli.main()
+    assert exc.value.code == 2
+    assert "--exclude" in capsys.readouterr().err

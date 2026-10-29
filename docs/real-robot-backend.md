@@ -38,8 +38,8 @@ robot, fed with whatever `encoders()` returns, and real controllers work the sam
   deliberate miscalibration of the controller or the camera, and `Fault.read_encoders` is the one
   hook that still applies (offset the reported angles before they reach the self-model).
 - **`simulate` and `fork`.** The twin can still be a MuJoCo model of the believed world, but it
-  must be built from estimated object poses, not copied from the plant. Today the tool is simply
-  absent in vision-only; on hardware it would be absent everywhere or rebuilt on estimates.
+  must be built from estimated object poses, not copied from the plant. Today the tool exists only in
+  the privileged tier; on hardware it would be absent or rebuilt on estimates.
 - **Exact replay.** The log stays useful (every call, result and image is recorded), but
   re-executing it cannot reproduce the world. `recording/replay.py` would report a mismatch and
   `scripts/episodes.py video` would need to render from recorded frames instead of a replay.

@@ -18,7 +18,7 @@ A fault (`core/faults.py`) has up to three hooks:
 |---|---|---|
 | `patch_spec(spec)` | before the plant is compiled | longer fingers, a tilted camera, a reduced joint range, a jammed gripper |
 | `read_encoders(q_true) -> q_reported` | every encoder read | encoder offsets |
-| `describe()` and `visibility` | the fault table, the viewer panel, the episode's `meta.json` | everyone |
+| `describe()` and the `hidden` flag | the fault table, the viewer panel, the episode's `meta.json` | everyone |
 
 `visibility` is `hidden` when the tool reports conceal the fault and `revealed` when they show it.
 
@@ -70,8 +70,10 @@ between the two separates knowing from being told what to do. Batches take `--wa
 ## Adding a preset
 
 1. Subclass `Fault` in `core/faults.py` or instantiate an existing class with new parameters
-   (`EncoderOffset(joint=0, offset_deg=3.0)`, `CameraTilt("wrist", pitch_deg=7.0)`).
-2. Give it a `name`, `visibility`, and a `describe()` that an operator would understand.
+   (`EncoderOffset("encoder_j1_3deg", joint=0, offset_deg=3.0)`,
+   `CameraTilt("wrist_cam_7deg", camera="wrist", tilt_deg=7.0)`).
+2. Give it a `name`, set the class's `hidden` flag (`visibility` is derived from it), and write a
+   `describe()` an operator would understand.
 3. Add it to the `FAULTS` table. It is now a `--fault` choice everywhere.
 4. Run `python -m pytest tests/test_faults.py -q`: the leak audit covers every entry in the table.
 

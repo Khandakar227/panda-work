@@ -35,7 +35,7 @@ the MJCF's `home` keyframe.
 1. **Drop in the model.** Put the MJCF and meshes under `assets/<robot>/` and point
    `PANDA_SCENE` at its scene file. Keep the licence file of the source next to it.
 2. **Name the joints.** Set `ARM_JOINTS`, `ARM_JOINT_LIMITS` (copy the ranges from the MJCF;
-   `tests/test_reach.py` checks they match the compiled model) and `FINGER_JOINTS`.
+   `tests/test_robot_tools.py` checks they match the compiled model) and `FINGER_JOINTS`.
 3. **Give it a tool centre point.** Either add a site named `tcp` at the fingertip centre in
    the MJCF, or keep `panda_spec`'s code that adds one and set `TCP_OFFSET` to the distance from
    the hand body origin. The body the site hangs from is `hand` in `panda_spec`; rename it there.
@@ -74,8 +74,8 @@ the MJCF's `home` keyframe.
 Run the `reach` oracle over a few seeds and the two test files that exercise motion end to end:
 
 ```bash
-python scripts/oracle_eval.py reach --seeds 0-4        # expect 5/5
-python -m pytest tests/test_reach.py tests/test_motion.py -q
+python scripts/oracle_eval.py --tasks reach --seeds 5   # expect 5/5
+python -m pytest tests/test_robot_tools.py tests/test_reach.py tests/test_motion.py -q
 ```
 
 A wrong TCP site shows up here as a reach error of centimetres, not millimetres. Then run the

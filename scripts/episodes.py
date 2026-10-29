@@ -14,6 +14,7 @@ from pathlib import Path
 
 from pandawork.core.robot import PACKAGE_ROOT
 from pandawork.recording import EpisodeRecorder, load, render_video, replay, summarise
+from pandawork.recording.video import require_ffmpeg
 from pandawork.tasks import TASKS, make_episode
 from pandawork.tiers import Tier
 
@@ -21,6 +22,8 @@ RUNS = PACKAGE_ROOT / "runs"
 
 
 def cmd_record(args):
+    if args.video:
+        require_ffmpeg()  # fail before spending a recording
     tier = Tier(args.tier)
     out = Path(args.out or RUNS / f"{args.task}-{tier.value}-s{args.seed}")
     ep = make_episode(args.task, tier=tier, seed=args.seed)
@@ -81,7 +84,7 @@ def main():
     p.add_argument("--out", help="episode folder (default runs/<task>-<tier>-s<seed>)")
     p.add_argument("--video", action="store_true", help="then render it to MP4 (needs ffmpeg)")
     p.add_argument("--camera", default="side", choices=["front", "side", "top", "wrist"],
-                   help="camera for --video")
+                   help="camera for --video (ignored without it)")
     p.set_defaults(fn=cmd_record)
     p = sub.add_parser("list", help="list recorded episodes")
     p.add_argument("root", nargs="?", default=str(RUNS))
@@ -95,7 +98,10 @@ def main():
             p.add_argument("--camera", default="front", choices=["front", "side", "top", "wrist"])
         p.set_defaults(fn=fn)
     args = parser.parse_args()
-    args.fn(args)
+    try:
+        args.fn(args)
+    except RuntimeError as exc:  # e.g. ffmpeg missing: one line, no traceback
+        sys.exit(f"episodes.py: {exc}")
 
 
 if __name__ == "__main__":
