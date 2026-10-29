@@ -11,51 +11,57 @@ import mujoco
 import numpy as np
 
 PACKAGE_ROOT = Path(__file__).resolve().parents[3]
-PANDA_DIR = PACKAGE_ROOT / "assets" / "franka_emika_panda"
-PANDA_SCENE = PANDA_DIR / "scene.xml"
 
-ARM_JOINTS = [f"joint{i}" for i in range(1, 8)]
+# --- Robot description: change these for another arm ---------------------------------------
+# Everything below describes the Franka Panda as this harness uses it. docs/adding-a-robot.md
+# walks through swapping it; the comment on each line names what depends on the value.
+PANDA_DIR = PACKAGE_ROOT / "assets" / "franka_emika_panda"   # where the MJCF and meshes live
+PANDA_SCENE = PANDA_DIR / "scene.xml"                         # the model panda_spec() loads
+
+ARM_JOINTS = [f"joint{i}" for i in range(1, 8)]               # world (control), sensors (encoders), faults, ik
 # Joint ranges (rad) as defined in the vendored panda.xml; tests check they match the model.
 ARM_JOINT_LIMITS = [(-2.8973, 2.8973), (-1.7628, 1.7628), (-2.8973, 2.8973), (-3.0718, -0.0698),
-                    (-2.8973, 2.8973), (-0.0175, 3.7525), (-2.8973, 2.8973)]
-FINGER_JOINTS = ["finger_joint1", "finger_joint2"]
-TCP_SITE = "tcp"
-TCP_OFFSET = 0.1034  # flange -> fingertip centre along the hand z-axis (Franka spec)
-GRIPPER_OPEN = 255.0
-GRIPPER_CLOSED = 0.0
-GRIPPER_MAX_WIDTH = 0.08  # metres between the fingers at GRIPPER_OPEN
-GRIPPER_STIFFNESS_SCALE = 5.0  # stock servo squeezes ~2.5 N and drops 200 g; 5x holds 500 g
+                    (-2.8973, 2.8973), (-0.0175, 3.7525), (-2.8973, 2.8973)]   # joint_limits_deg(), check_reachable
+FINGER_JOINTS = ["finger_joint1", "finger_joint2"]            # world (gripper width), sensors (finger state)
+TCP_SITE = "tcp"             # the fingertip-centre site panda_spec() adds: ik, every motion report, faults, watch markers
+TCP_OFFSET = 0.1034          # flange -> fingertip centre along the hand z-axis (Franka spec): where panda_spec() puts TCP_SITE
+GRIPPER_OPEN = 255.0         # actuator command for fully open: control, world
+GRIPPER_CLOSED = 0.0         # actuator command for fully closed: gripper_ctrl()
+GRIPPER_MAX_WIDTH = 0.08     # metres between the fingers at GRIPPER_OPEN: gripper tool, skills.motion
+GRIPPER_STIFFNESS_SCALE = 5.0  # stock servo squeezes ~2.5 N and drops 200 g; 5x holds 500 g: panda_spec()
 
 # Gripper pointing straight down with the fingers closing along world x: the home TCP
 # orientation, and "yaw 0" for the agent's tools. Yaw rotates it about the world z-axis.
-DOWN_QUAT = np.array([0.0, np.sqrt(0.5), np.sqrt(0.5), 0.0])
+DOWN_QUAT = np.array([0.0, np.sqrt(0.5), np.sqrt(0.5), 0.0])          # yaw_quat(), POINTING
 # Gripper pointing forward (fingertips along world +x, away from the robot) with the fingers
 # closing sideways (along world y) and the wrist camera upright: for pushing things on
 # vertical surfaces facing the robot. Its "yaw" turns it about the world x-axis (90: fingers
 # close up-down). The Panda points forward comfortably only with the hand about 0.65 m or more
 # above its base: lower, the wrist runs out of range.
-FORWARD_QUAT = np.array([0.0, np.sqrt(0.5), 0.0, np.sqrt(0.5)])
-READY_FORWARD_DEG = (0.0, -22.0, 0.0, -125.0, 0.0, 193.0, 45.0)  # fingertips at ~(0.56, 0, 0.74)
-POINTING = {"down": (DOWN_QUAT, np.array([0.0, 0.0, 1.0])),
+FORWARD_QUAT = np.array([0.0, np.sqrt(0.5), 0.0, np.sqrt(0.5)])       # yaw_quat(), POINTING
+READY_FORWARD_DEG = (0.0, -22.0, 0.0, -125.0, 0.0, 193.0, 45.0)  # fingertips at ~(0.56, 0, 0.74): skills.motion (forward posture)
+POINTING = {"down": (DOWN_QUAT, np.array([0.0, 0.0, 1.0])),            # pointing_of(), the move tools' "pointing" argument
             "forward": (FORWARD_QUAT, np.array([1.0, 0.0, 0.0]))}
 
-FT_SITE = "ft"
-WRIST_FORCE = "wrist_force"
+FT_SITE = "ft"                               # wrist force/torque site panda_spec() adds: skills.sensing, read_wrist_ft
+WRIST_FORCE = "wrist_force"                  # sensor names _add_sensors() creates: sensors, sensing
 WRIST_TORQUE = "wrist_torque"
-TOUCH_SENSORS = ("touch_left", "touch_right")
+TOUCH_SENSORS = ("touch_left", "touch_right")   # finger touch pads: sensors, the gripper tool's grasp check
 
 # name -> (parent body, position, look-at target, up vector, vertical fov in degrees).
 # Positions/targets are in the parent body's frame ("world" for fixed cameras).
+# Used by render (offscreen cameras), the look tool, and the system prompt's camera list.
 CAMERAS = {
     "front": ("world", (1.25, 0.0, 0.55), (0.45, 0.0, 0.08), (0.0, 0.0, 1.0), 45.0),
     "top": ("world", (0.50, 0.0, 1.60), (0.50, 0.0, 0.0), (1.0, 0.0, 0.0), 60.0),
     "side": ("world", (0.52, -0.80, 0.38), (0.52, 0.0, 0.06), (0.0, 0.0, 1.0), 55.0),
-    "wrist": ("hand", (0.055, 0.0, 0.06), (0.0, 0.0, 0.17), (1.0, 0.0, 0.0), 75.0),
+    "wrist": ("hand", (0.055, 0.0, 0.06), (0.0, 0.0, 0.17), (1.0, 0.0, 0.0), 75.0),   # "hand" is a Panda body name
 }
 MAX_RENDER_SIZE = (1280, 720)  # offscreen buffer (width, height)
-TABLE_HEIGHT = 0.75             # tabletop above the floor (m); the tabletop is z = 0
+TABLE_HEIGHT = 0.75             # tabletop above the floor (m); the tabletop is z = 0: scene, tasks
 TABLE_X = (-0.30, 0.95)         # tabletop extent in x (m); the robot base sits near the back edge
 TABLE_HALF_Y = 0.60
+# --- end of robot description ---------------------------------------------------------------
 
 
 def joint_limits_deg() -> list[tuple[float, float]]:
