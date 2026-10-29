@@ -45,7 +45,7 @@ def _camera_lines() -> str:
     return "\n".join(lines)
 
 
-# The fault study's warning arms. "mild" states a fact a robot operator would know and nothing
+# System-prompt variants for experiments with hidden faults. "mild" states a fact a robot operator would know and nothing
 # more; "full" adds the instruction to verify. The gap between them separates knowing from
 # being told what to do. "none" is the deployed condition: nobody tells an agent the robot is off.
 WARNINGS = {

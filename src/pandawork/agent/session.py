@@ -37,8 +37,8 @@ def neutral_cwd() -> Path:
     """An empty directory with a bland name for the agent's working directory.
 
     Claude Code tells the model its working directory, so the episode folder must never be used:
-    its name carries the task, the tier and the fault label (e.g. stack-vision_only-f_top_cam_2deg-s1)
-    and the first grid run leaked it (agents quoted "the task name f_encoder_j1_5deg")."""
+    its name carries the task, the tier and the fault label (e.g. stack-vision_only-f_top_cam_2deg-s1),
+    and agents have been seen quoting their working directory ("the task name f_encoder_j1_5deg")."""
     cwd = Path(tempfile.gettempdir()) / "robot-session"
     cwd.mkdir(exist_ok=True)
     return cwd

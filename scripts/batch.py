@@ -1,11 +1,11 @@
 """Run a batch of episodes over tasks x tiers x seeds, and report on it.
 
-  python scripts/batch.py run pilot --agent claude --seeds 0-9 --max-total-usd 8
+  python scripts/batch.py run demo --agent claude --seeds 0-9 --max-total-usd 8
   python scripts/batch.py run oracle-check --agent oracle --seeds 0-4    # free pipeline check
-  python scripts/batch.py report pilot
+  python scripts/batch.py report demo
   python scripts/batch.py run faults --faults none encoder_j1_5deg --tasks pick_place --seeds 0-4
-  python scripts/batch.py run study --faults none encoder_j1_5deg --max-calls 60 --warn both
-  python scripts/batch.py run pilot ... --watch          # every episode in the viewer, fault on screen
+  python scripts/batch.py run faults-study --faults none encoder_j1_5deg --max-calls 60 --warn both
+  python scripts/batch.py run demo ... --watch          # every episode in the viewer, fault on screen
 
 Runs are resumable: re-running the same command skips finished episodes. Episodes live in
 runs/batch/<name>/<task>-<tier>-s<seed>/ and can be inspected with scripts/episodes.py.

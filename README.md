@@ -1,4 +1,4 @@
-# MISFIT
+# pandawork
 
 **MIS**calibrated **S**elf-model **F**aults **I**n **T**ool-driven manipulation: a harness in
 which an LLM agent (Claude) operates a simulated Franka Panda arm in MuJoCo through tools, the
@@ -30,7 +30,7 @@ PATH) for anything that runs the agent. Scripted oracles, tests, replay and anal
 ```bash
 cd ".../Thesis/ROBOTICS"
 python3 -m venv .venv && source .venv/bin/activate
-pip install -e "panda_harness[dev,agent]"     # the repo folder; the Python package is `misfit`
+pip install -e ".[dev,agent]"     # the Python package is `pandawork`
 cd panda_harness
 pytest -q                      # ~75 s, 182 tests, no network
 ```
@@ -201,24 +201,12 @@ prompt stays in Claude Code's prompt cache), under a total cost cap. Each episod
 # free pipeline check with the oracles
 python scripts/batch.py run fault-check --agent oracle --tasks reach pick_place --seeds 0-1 --faults none encoder_j1_5deg gripper_5cm
 
-# the pilot of the fault study (90 Claude episodes, $6.76; results in runs/batch/pilot)
-python scripts/batch.py run pilot --tasks pick_place press_button --faults none encoder_j1_5deg fingertip_2cm_long \
+# a Claude batch over two tasks, three tiers, five seeds, with and without a hidden fault
+python scripts/batch.py run demo --tasks pick_place press_button --faults none encoder_j1_5deg \
        --tiers privileged realistic vision_only --seeds 0-4 --max-calls 60 --max-total-usd 15
-
-# grid run 1 (runs/batch/grid, 216 episodes, Oct 2026) is void: the agent's working directory was the
-# episode folder, whose name carries the fault label (see docs/grid1-review.md in ../docs). Fixed in
-# session.py; analyze.py now ends with a "label leak check" line. press_key is dropped (2/9 even with
-# no fault) and stiff_j4 runs only on pick_place and press_button (it makes drawer and stack unreachable).
-# the main grid: seeds 0-5 done (324 episodes, $36.76, clean, n = 24 per fault x tier cell); seeds 6-9 deferred
-# in favour of the warning arm and a second model; results and decisions in ../docs/grid2-review.md (sections 8-9)
-python scripts/batch.py run grid2 --tasks pick_place press_button open_drawer stack \
-       --faults none encoder_j1_5deg top_cam_2deg gripper_5cm stiff_j4 --seeds 0-9 --max-calls 60 --max-total-usd 90
-python scripts/batch.py run grid2-warn --tasks pick_place press_button open_drawer stack \
-       --faults none encoder_j1_5deg top_cam_2deg --tiers realistic --seeds 0-9 --warn all --max-calls 60 --max-total-usd 50
-
-python scripts/batch.py report pilot               # tables only
-python scripts/analyze.py runs/batch/pilot          # + behavioural measures (free, seconds)
-python scripts/analyze.py runs/batch/pilot --judge  # + a Haiku judge reads each transcript (~$0.025/episode)
+python scripts/batch.py report demo                # tables only
+python scripts/analyze.py runs/batch/demo          # + behavioural measures (free, seconds)
+python scripts/analyze.py runs/batch/demo --judge  # + a Haiku judge reads each transcript (~$0.03 each)
 ```
 
 **Interrupting and resuming.** Stop a batch at any time (Ctrl-C, a usage limit, a crash) and
@@ -251,10 +239,8 @@ after `analyze.py`, the fault-response measures:
 prints every approach (target, true miss, compensation).
 
 The judge is blind to the condition (it is not told whether a fault was present) and its
-answers are versioned: changing the questions re-judges on the next `--judge`. To check it
-against a human: `python scripts/judge_check.py runs/batch/<name> --n 50` writes a stratified,
-blind sample of transcripts and a `blind.csv` to fill in; `--score` then reports percent
-agreement, Cohen's kappa and every disagreement with both quotes.
+answers are versioned: changing the questions re-judges on the next `--judge`. The judge's
+questions and answers are in `docs/analysis.md`.
 
 ## Episode files
 
@@ -276,7 +262,7 @@ by exact replay on first analysis.
 ## Code layout
 
 ```
-src/misfit/
+src/pandawork/
 ├── core/        robot model and scenes (robot.py, scene.py), IK and the self-model (ik.py), controller
 │                (control.py), faults.py, rendering, viewer helpers
 ├── world/       World: plant + self-model + clock + event bus; sensors with tier noise; fork() for twins
@@ -286,10 +272,10 @@ src/misfit/
 ├── agent/       Claude through the Agent SDK: prompt.py, bridge.py (tools as an MCP server),
 │                runner.py (one episode), live.py (interactive), session.py (options, usage)
 ├── recording/   recorder (events, truth), exact replay, video
-├── evaluation/  batch.py (resumable grids), analysis.py (measures, judge), judge_check.py (blind hand-check), report.py (tables, CSV)
+├── evaluation/  batch.py (resumable grids), analysis.py (measures, judge), report.py (tables, CSV)
 ├── watch.py     viewer panel and markers; Watch hook for any runner
 └── tiers.py
-scripts/         oracle_eval, faults, run_agent, live, batch, analyze, judge_check, episodes, tool_console, bus_monitor, snapshot, reach_demo, reach_eval
+scripts/         oracle_eval, faults, run_agent, live, batch, analyze, episodes, tool_console, bus_monitor, snapshot, reach_demo, reach_eval
 tests/           182 pytest tests (faults leak audit: test_faults.py; grid: test_fault_grid.py; measures: test_analysis.py)
 docs/milestones.md   the build log with manual tests for every milestone
 ../docs/             fault-study-design.md, harness-design-notes.md
@@ -313,7 +299,7 @@ python scripts/bus_monitor.py --check-determinism
 ## Troubleshooting
 
 - **`EGLError` tracebacks at exit** are harmless; results are written before them.
-- **`misfit: corrupted seg render ... renderers rebuilt`** on stderr: a GL context was lost and rebuilt; the episode continues. If it repeats, check `MUJOCO_GL` (EGL is the default) and the `render` group.
+- **`pandawork: corrupted seg render ... renderers rebuilt`** on stderr: a GL context was lost and rebuilt; the episode continues. If it repeats, check `MUJOCO_GL` (EGL is the default) and the `render` group.
 - **`JSON message exceeded maximum buffer size`** in an episode's `result.json` error: an SDK older than the one pinned, or `max_buffer_size` removed from the session options; a noisy 640x480 image is a ~500 KB message.
 - **Viewer segfault or hang on close** (seen on Wayland): scripts end through `core/viewer.py:exit_after`, which skips interpreter teardown. Logs are already closed by then.
 - **ROS 2 sourced in the shell**: `pytest` still works; the project config disables ROS's pytest plugins.

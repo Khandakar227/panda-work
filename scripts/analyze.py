@@ -1,8 +1,8 @@
-"""Analyse finished episodes for the fault study: verification, compensation, side effects,
+"""Analyse finished episodes: verification, compensation, side effects,
 and (optionally) a Haiku judge's reading of what the agent said. Then rewrite the report.
 
-  python scripts/analyze.py runs/batch/pilot                  # behavioural measures (free)
-  python scripts/analyze.py runs/batch/pilot --judge           # + judge.json per episode (~$0.025 each)
+  python scripts/analyze.py runs/batch/demo                   # behavioural measures (free)
+  python scripts/analyze.py runs/batch/demo --judge            # + judge.json per episode (~$0.025 each)
   python scripts/analyze.py runs/agent/pick_place-realistic-s0-20261016-022537 --judge   # one episode
 
 Writes analysis.json (and judge.json) into each episode folder, oracle_ref.json into the run

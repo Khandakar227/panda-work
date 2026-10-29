@@ -4,7 +4,7 @@ A fault is applied to the plant only. The self-model, and so every tool report c
 ("reached, error 0.6 mm", "fingertip at ..."), keeps assuming the nominal robot. Some faults are
 *hidden* by those reports (an encoder offset: the belief lands on the target while the hand does
 not); others are *revealed* by them (a stiff joint: the move comes back partial). Which is which
-is the point of the study.
+is the point of a fault experiment.
 
 A fault has up to three hooks:
   patch_spec(spec)  edits the plant's MjSpec before compilation (geometry, ranges, cameras);

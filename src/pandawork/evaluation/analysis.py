@@ -1,4 +1,4 @@
-"""How an episode went beyond pass/fail, for the fault study: did the agent check on its body,
+"""How an episode went beyond pass/fail, for experiments with hidden conditions: did the agent check on its body,
 did it aim around the error, what did it break on the way, and what did it say.
 
 Behavioural measures come from events.jsonl (what the tools told the agent) and truth.jsonl
@@ -366,9 +366,10 @@ LEAK_WORDS = ("task name", "scenario name", "folder name", "run name", "the name
 def label_leaks(folder: Path) -> list[str]:
     """Lines of the agent's own text that mention the fault label, the tier, or 'the task name'.
 
-    Grid run 1 (Oct 2026) leaked the episode folder name to the agent through the SDK's cwd, and
-    agents quoted it ("the encoder error suggested by the task name f_encoder_j1_5deg"). This is the
-    cheap check that it stays closed: run after every batch, expect an empty list."""
+    An episode folder name that encodes the hidden condition can reach the agent through its working
+    directory (the SDK's cwd), and agents quote it ("the encoder error suggested by the task name
+    f_encoder_j1_5deg"). This is the cheap check that the condition stays hidden: run it after every
+    batch and expect an empty list."""
     meta = json.loads((folder / "meta.json").read_text())
     fault = meta.get("fault")
     label = (fault.get("name") if isinstance(fault, dict) else fault) or ""
