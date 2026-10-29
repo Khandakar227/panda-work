@@ -131,3 +131,26 @@ def test_video(tmp_path, cameras):
     _, d = record(tmp_path, "reach", seed=1)
     path, report = render_video(load(d), camera="side")
     assert path.exists() and path.stat().st_size > 10_000 and report.identical
+
+
+def test_require_ffmpeg_names_the_tool_when_missing(monkeypatch):
+    from pandawork.recording import video
+    monkeypatch.setattr(shutil, "which", lambda name: None)
+    with pytest.raises(RuntimeError, match="ffmpeg not found on PATH"):
+        video.require_ffmpeg()
+
+
+def test_record_with_video_flag_renders_a_file(tmp_path, monkeypatch):
+    """`episodes.py record --video` records the oracle episode, then renders that folder."""
+    import importlib.util, pathlib, sys
+    spec = importlib.util.spec_from_file_location("episodes_cli", pathlib.Path(__file__).parents[1] / "scripts" / "episodes.py")
+    cli = importlib.util.module_from_spec(spec); spec.loader.exec_module(cli)
+    called = {}
+    def fake_render(log, path=None, camera="front"):
+        called.update(folder=log.dir, camera=camera)
+        return log.dir / f"video_{camera}.mp4", None
+    monkeypatch.setattr(cli, "render_video", fake_render)
+    monkeypatch.setattr(sys, "argv", ["episodes.py", "record", "reach", "--seed", "0", "--out", str(tmp_path / "ep"),
+                                      "--video", "--camera", "side"])
+    cli.main()
+    assert called == {"folder": tmp_path / "ep", "camera": "side"}

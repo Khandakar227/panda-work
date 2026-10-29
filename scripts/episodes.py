@@ -1,6 +1,6 @@
 """Work with episode logs: record, list, inspect, replay-verify, and render to video.
 
-  python scripts/episodes.py record pick_place --seed 3        # record an oracle episode
+  python scripts/episodes.py record pick_place --seed 3 --video   # record an oracle episode, render it
   python scripts/episodes.py record reach --seed 1 --tier realistic
   python scripts/episodes.py list                              # all episodes under runs/
   python scripts/episodes.py show runs/pick_place-privileged-s3
@@ -29,6 +29,9 @@ def cmd_record(args):
     path = recorder.finish()
     print(f"recorded {path.relative_to(PACKAGE_ROOT) if path.is_relative_to(PACKAGE_ROOT) else path}")
     print(json.loads((path / "result.json").read_text())["summary"])
+    if args.video:
+        video, _ = render_video(load(path), camera=args.camera)
+        print(f"wrote {video}")
 
 
 def cmd_list(args):
@@ -76,6 +79,9 @@ def main():
     p.add_argument("--seed", type=int, default=0)
     p.add_argument("--tier", default="privileged", choices=[t.value for t in Tier])
     p.add_argument("--out", help="episode folder (default runs/<task>-<tier>-s<seed>)")
+    p.add_argument("--video", action="store_true", help="then render it to MP4 (needs ffmpeg)")
+    p.add_argument("--camera", default="side", choices=["front", "side", "top", "wrist"],
+                   help="camera for --video")
     p.set_defaults(fn=cmd_record)
     p = sub.add_parser("list", help="list recorded episodes")
     p.add_argument("root", nargs="?", default=str(RUNS))

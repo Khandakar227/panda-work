@@ -12,12 +12,17 @@ FPS = 25
 SIZE = (640, 480)
 
 
+def require_ffmpeg() -> None:
+    """Fail early, with a one-line reason, when ffmpeg is missing."""
+    if shutil.which("ffmpeg") is None:
+        raise RuntimeError("ffmpeg not found on PATH; install it to render videos")
+
+
 class VideoWriter:
     """Pipes RGB frames into ffmpeg (H.264, yuv420p: plays everywhere)."""
 
     def __init__(self, path: Path, size=SIZE, fps: int = FPS):
-        if shutil.which("ffmpeg") is None:
-            raise RuntimeError("ffmpeg is not installed; video rendering needs it")
+        require_ffmpeg()
         self.proc = subprocess.Popen(
             ["ffmpeg", "-y", "-loglevel", "error", "-f", "rawvideo", "-pix_fmt", "rgb24",
              "-s", f"{size[0]}x{size[1]}", "-r", str(fps), "-i", "-", "-c:v", "libx264",
@@ -34,6 +39,7 @@ class VideoWriter:
 
 def render_video(log: EpisodeLog, path: Path | None = None, camera: str = "front") -> tuple[Path, ReplayReport]:
     """Replay the episode, capturing `camera` at 25 fps with a caption of the current tool call."""
+    require_ffmpeg()
     path = Path(path or log.dir / f"video_{camera}.mp4")
     writer = VideoWriter(path)
     caption = {"text": "start"}
