@@ -9,7 +9,6 @@ How the pieces fit, written from the code as it is. Module names are under `src/
 | `core/robot.py`, `core/scene.py` | the Panda model and the table; scene builders (cubes, pads, buttons, drawer, bins, keypad) |
 | `core/ik.py` | `SelfModel`: forward kinematics, damped-least-squares IK with soft joint limits, gravity torques, all on the robot's *belief* |
 | `core/control.py` | one physics step of control: joint position servo targets plus gravity compensation from the self-model |
-| `core/faults.py` | ways the plant can differ from the self-model, applied to the plant only |
 | `core/render.py`, `core/viewer.py` | offscreen cameras (RGB, depth, segmentation); the passive viewer and a clean exit |
 | `world/bus.py`, `world/messages.py` | a synchronous in-process publish/subscribe bus with a simulated clock and per-topic history |
 | `world/sensors.py`, `world/noise.py` | sensors that read the plant, add the tier's noise, and publish stamped messages |
@@ -19,16 +18,16 @@ How the pieces fit, written from the code as it is. Module names are under `src/
 | `tasks/` | `Task` base (scene, reset, monitor, evaluate, oracle), the task library, `make_episode` |
 | `agent/` | the Claude Agent SDK client: system prompt per tier, the MCP bridge, the episode runner, the live console, session options and usage accounting |
 | `recording/` | the recorder (events, streams, snapshots, blobs, truth), exact replay, video, the cost ledger |
-| `evaluation/` | batches (resumable grids), analysis (measures, judge, leak check), reports |
+| `evaluation/` | batches (resumable grids) and reports |
 | `watch.py` | the viewer panel and markers, hooked into any runner |
 
 ## One episode
 
-`tasks/episode.py:make_episode(task, tier, seed, limits, fault)`:
+`tasks/episode.py:make_episode(task, tier, seed, limits)`:
 
-1. The task builds a scene spec; `task.models(fault)` compiles two models from it, the plant
-   with the fault's `patch_spec` applied and the self-model without.
-2. `World(plant, self_model, tier, seed, fault)` creates the clock, the bus, the default sensors
+1. The task builds a scene spec; `task.models()` compiles two identical models from it, the
+   plant and the self-model.
+2. `World(plant, self_model, tier, seed)` creates the clock, the bus, the default sensors
    (joints, wrist F/T, touch, cameras) with the tier's noise, and seeded random streams per sensor.
 3. The task places objects from a seeded generator and writes its instruction; the world settles
    for a moment of simulated time.
@@ -70,26 +69,24 @@ log call -> tier gate -> guards -> budget -> validate args -> run (with a deadli
 Every message on the bus, including the tool call and its result, reaches the recorder. The
 recorder writes `events.jsonl` (low-rate messages), `streams.npz` (high-rate sensors),
 `snapshots.npz` (full simulator state at the start, after every turn, and at the end), `blobs/`
-(images), and, around each tool call, `truth.jsonl` with the true and believed fingertip, object
-poses and contacts. Truth is written by the recorder's hooks, never by a tool.
+(images), and, around each tool call, `truth.jsonl` with the fingertip, object poses and
+contacts. Truth is written by the recorder's hooks, never by a tool.
 
 ## Belief and plant
 
 Only `World.step` touches the plant's dynamics, and only through `apply_control`. Everything
 the agent reads goes through a sensor or a skill that computes on the self-model from the
-encoder readings. A fault sits between the two: `Fault.read_encoders` alters what the sensors
-report, `Fault.patch_spec` alters the compiled plant. The self-model is never patched. This is
-the whole mechanism; the leak audit in `tests/test_faults.py` is what keeps it honest when tools
-change.
+encoder readings, so the non-privileged tiers get what a real robot's software would have:
+its own model of itself plus its sensors, never ground truth. The privileged tier is the
+deliberate exception, for experiments that want a "told the truth" control.
 
-The agent's `simulate` tool uses `World.fork(as_believed=self_model)`: an independent copy with
-the nominal body and the arm at the encoder readings, so a prediction describes the believed
-world. `fork()` without that argument is the exact twin that tests and the oracle use.
+The agent's `simulate` tool uses `World.fork()`: an independent copy at the current instant,
+with its own clock, bus and noise streams, on which a plan can be run before committing to it.
 
 ## Determinism and replay
 
 The bus delivers synchronously in subscription order, the clock is simulated, and every sensor
-draws noise from its own seeded stream. The same `(task, tier, seed, fault)` and the same
+draws noise from its own seeded stream. The same `(task, tier, seed)` and the same
 sequence of tool calls therefore produce the same bytes. `recording/replay.py` re-executes the
 logged calls on a fresh episode and compares the final state hash and every snapshot;
 `scripts/episodes.py replay` reports whether the reproduction is identical. Video rendering is
@@ -97,18 +94,15 @@ a replay with a camera running.
 
 ## The agent side
 
-`agent/prompt.py` holds the system prompt: a base, a paragraph per tier, and the optional
-warning variants. `agent/bridge.py` turns the registry into an MCP server (named `panda`), pairs
+`agent/prompt.py` holds the system prompt: a base and a paragraph per tier. `agent/bridge.py` turns the registry into an MCP server (named `panda`), pairs
 each SDK tool-use event with the call that reaches the server, enforces the turn rule, and ends
 the episode when `done` arrives with the agent's claim. `agent/runner.py` runs one episode:
 options, prompt, budget, the usage ledger, the result file. `agent/session.py` is the part
 specific to the Claude Agent SDK: options, the neutral working directory, message buffer size,
 usage extraction. Another MCP-capable client replaces `session.py` and keeps the rest.
 
-## Batches and analysis
+## Batches and reports
 
 `evaluation/batch.py` expands a grid into `Job`s, names each episode folder from the job, and
 runs the unfinished ones under a total cost cap; it resumes by skipping folders that already have
-a `result.json`. `evaluation/analysis.py` computes the measures from `events.jsonl` and
-`truth.jsonl`, optionally asks a small model to read the transcript, and scans the agent's own
-text for the condition label. `evaluation/report.py` writes the tables and the CSV.
+a `result.json`. `evaluation/report.py` writes the tables and the CSV.

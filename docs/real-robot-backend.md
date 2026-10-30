@@ -34,26 +34,21 @@ robot, fed with whatever `encoders()` returns, and real controllers work the sam
 
 - **Privileged tools.** `get_object_poses`, `get_fixture_states` and the true fingertip are
   simulator truth. The privileged tier has no hardware meaning; only realistic and vision-only do.
-- **Faults as plant patches.** The plant is the robot. A fault experiment on hardware is a
-  deliberate miscalibration of the controller or the camera, and `Fault.read_encoders` is the one
-  hook that still applies (offset the reported angles before they reach the self-model).
-- **`simulate` and `fork`.** The twin can still be a MuJoCo model of the believed world, but it
-  must be built from estimated object poses, not copied from the plant. Today the tool exists only in
-  the privileged tier; on hardware it would be absent or rebuilt on estimates.
+- **`simulate` and `fork`.** The twin can still be a MuJoCo model of the world, but it must be
+  built from estimated object poses, not copied from the plant. Today the tool exists only in the
+  privileged tier; on hardware it would be absent or rebuilt on estimates.
 - **Exact replay.** The log stays useful (every call, result and image is recorded), but
   re-executing it cannot reproduce the world. `recording/replay.py` would report a mismatch and
   `scripts/episodes.py video` would need to render from recorded frames instead of a replay.
-- **Truth logging and the behavioural measures.** `truth.jsonl` records the true hand and
-  object poses around each call. On hardware those come from a motion-capture system or a
-  calibrated external camera, or the hand-error and compensation measures in
-  `docs/analysis.md` are unavailable.
+- **Truth logging.** `truth.jsonl` records the hand and object poses around each call. On
+  hardware those come from a motion-capture system or a calibrated external camera, or not at all.
 - **Task evaluation.** `Task.evaluate` reads the simulator (cube on pad, drawer opening, button
   travel). Each task needs a physical check: a scale, a switch in the button, a camera and a
   marker, or a human.
 
 What survives unchanged: the tool definitions and their schemas, the tier gate, budgets, the
-turn rule, the system prompt, the MCP bridge, the recorder's event log, the batch runner, the
-judge and the leak check.
+turn rule, the system prompt, the MCP bridge, the recorder's event log, the batch runner and
+its reports.
 
 ## A first step
 

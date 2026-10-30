@@ -13,7 +13,6 @@ import time
 
 import numpy as np
 
-from pandawork.core.faults import FAULTS
 from pandawork.core.viewer import exit_after
 from pandawork.tasks import TASKS, make_episode
 from pandawork.tasks.library import TypeCodeTask
@@ -24,11 +23,11 @@ def task_for(name: str, code: str | None):
     return TypeCodeTask(code) if name == "type_code" and code else name
 
 
-def evaluate(task: str, seeds: int, code: str | None = None, fault: str = "none") -> dict:
+def evaluate(task: str, seeds: int, code: str | None = None) -> dict:
     results, sim, calls, wall = [], [], [], []
     for seed in range(seeds):
         tic = time.perf_counter()
-        ep = make_episode(task_for(task, code), seed=seed, fault=FAULTS[fault])
+        ep = make_episode(task_for(task, code), seed=seed)
         ep.task.oracle(ep.dispatcher)
         ev = ep.evaluate()
         results.append((seed, ev))
@@ -39,13 +38,11 @@ def evaluate(task: str, seeds: int, code: str | None = None, fault: str = "none"
     return {"results": results, "sim": np.mean(sim), "calls": np.mean(calls), "wall": np.sum(wall)}
 
 
-def watch(task: str, seed: int, code: str | None = None, fault: str = "none") -> None:
-    """One oracle episode in the viewer, with the panel and fault markers of pandawork.watch."""
+def watch(task: str, seed: int, code: str | None = None) -> None:
+    """One oracle episode in the viewer, with the panel of pandawork.watch."""
     from pandawork.watch import Watch
-    ep = make_episode(task_for(task, code), seed=seed, fault=FAULTS[fault])
+    ep = make_episode(task_for(task, code), seed=seed)
     print(f"{task} seed {seed}: {ep.task.instruction}")
-    if fault != "none":
-        print(f"Fault: {fault} ({FAULTS[fault].visibility}): {FAULTS[fault].describe()}")
     watcher = Watch(realtime=1.0, hold=True)
     close = watcher(ep)
     watcher.overlay.set(claude="oracle")
@@ -67,9 +64,6 @@ def main():
     parser.add_argument("--seed", type=int, default=0, help="seed for --watch")
     parser.add_argument("--code", help="type_code only: type this code (digits 1-9) instead of "
                         "the one drawn from the seed")
-    parser.add_argument("--fault", default="none", choices=list(FAULTS),
-                        help="run the oracle on a faulty body (it trusts the tools, so it fails "
-                             "when the fault is hidden)")
     args = parser.parse_args()
     if args.code:
         try:
@@ -78,13 +72,13 @@ def main():
             parser.error(str(exc))
 
     if args.watch:
-        watch(args.watch, args.seed, args.code, args.fault)
+        watch(args.watch, args.seed, args.code)
         return
 
     print(f"{'task':<14}{'success':>10}{'sim s':>8}{'calls':>7}{'wall s':>8}")
     ok = True
     for task in args.tasks:
-        r = evaluate(task, args.seeds, args.code, args.fault)
+        r = evaluate(task, args.seeds, args.code)
         wins = sum(ev.success for _, ev in r["results"])
         rate = wins / args.seeds
         ok &= rate >= args.require

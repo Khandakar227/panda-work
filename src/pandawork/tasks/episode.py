@@ -3,7 +3,6 @@ from dataclasses import dataclass
 
 import numpy as np
 
-from ..core.faults import NO_FAULT, Fault
 from ..tiers import Tier
 from ..tools import Budget, BudgetLimits, Dispatcher, ToolContext, default_registry
 from ..world import World
@@ -30,12 +29,10 @@ class Episode:
 
 
 def make_episode(task: str | Task, tier: Tier = Tier.PRIVILEGED, seed: int = 0,
-                 limits: BudgetLimits | None = None, fault: Fault = NO_FAULT) -> Episode:
-    """`fault`: a way the body differs from the robot's self-model (core.faults); the tools
-    keep reporting the belief."""
+                 limits: BudgetLimits | None = None) -> Episode:
     task = TASK_CLASSES[task]() if isinstance(task, str) else task
-    self_model, plant = task.models(fault)
-    world = World(plant, self_model, tier=tier, seed=seed, fault=fault)
+    self_model, plant = task.models()
+    world = World(plant, self_model, tier=tier, seed=seed)
     if task.start_deg is not None:
         world.set_arm(np.radians(task.start_deg))
     task.reset(world, task.seed_rng(seed))

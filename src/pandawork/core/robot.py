@@ -1,7 +1,7 @@
 """Panda models: the robot's self-model (its belief) and the plant (the body that moves).
 
 Controllers only ever compute with the self-model. The plant is what gets simulated and,
-later, what tasks and faults act on. Both are built from the vendored Menagerie Panda plus the
+later, what tasks act on. Both are built from the vendored Menagerie Panda plus the
 additions below (TCP site, wrist F/T, finger touch pads, cameras), applied in code so the
 vendored files stay untouched.
 """
@@ -18,12 +18,12 @@ PACKAGE_ROOT = Path(__file__).resolve().parents[3]
 PANDA_DIR = PACKAGE_ROOT / "assets" / "franka_emika_panda"   # where the MJCF and meshes live
 PANDA_SCENE = PANDA_DIR / "scene.xml"                         # the model panda_spec() loads
 
-ARM_JOINTS = [f"joint{i}" for i in range(1, 8)]               # world (control), sensors (encoders), faults, ik
+ARM_JOINTS = [f"joint{i}" for i in range(1, 8)]               # world (control), sensors (encoders), ik
 # Joint ranges (rad) as defined in the vendored panda.xml; tests check they match the model.
 ARM_JOINT_LIMITS = [(-2.8973, 2.8973), (-1.7628, 1.7628), (-2.8973, 2.8973), (-3.0718, -0.0698),
                     (-2.8973, 2.8973), (-0.0175, 3.7525), (-2.8973, 2.8973)]   # joint_limits_deg(), check_reachable
 FINGER_JOINTS = ["finger_joint1", "finger_joint2"]            # world (gripper width), sensors (finger state)
-TCP_SITE = "tcp"             # the fingertip-centre site panda_spec() adds: ik, every motion report, faults, watch markers
+TCP_SITE = "tcp"             # the fingertip-centre site panda_spec() adds: ik, every motion report, watch markers
 TCP_OFFSET = 0.1034          # flange -> fingertip centre along the hand z-axis (Franka spec): where panda_spec() puts TCP_SITE
 GRIPPER_OPEN = 255.0         # actuator command for fully open: control, world
 GRIPPER_CLOSED = 0.0         # actuator command for fully closed: gripper_ctrl()

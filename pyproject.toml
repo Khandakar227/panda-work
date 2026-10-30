@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "pandawork"
 version = "0.1.0"
-description = "A harness where an LLM agent operates a simulated Franka Panda through tools: tiers of perception, scripted oracles, calibration faults, recording and replay, batches and analysis."
+description = "A harness where an LLM agent operates a simulated Franka Panda through tools: tiers of perception, scripted oracles, exact recording and replay, batches and reports."
 requires-python = ">=3.10"
 license = {text = "MIT"}
 readme = "README.md"

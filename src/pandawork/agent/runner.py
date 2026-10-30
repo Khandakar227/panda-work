@@ -10,32 +10,31 @@ from typing import Callable
 
 from claude_agent_sdk import ClaudeSDKClient
 
-from ..core.faults import NO_FAULT, Fault
 from ..recording import EpisodeRecorder
 from ..tasks import make_episode
 from ..tiers import Tier
 from ..tools import BudgetLimits
 from .bridge import ToolBridge
-from .prompt import system_prompt, task_message, warn_level
+from .prompt import system_prompt, task_message
 from .session import AgentConfig, MessageLog, RateLimited, claude_options
 
 
 async def run_agent_episode(task: str, tier: Tier, seed: int, out_dir: Path,
                             config: AgentConfig = AgentConfig(), limits: BudgetLimits | None = None,
-                            on_message: Callable | None = None, fault: Fault = NO_FAULT,
+                            on_message: Callable | None = None,
                             on_episode: Callable | None = None) -> Path:
     """Play one episode; returns the episode folder. `on_message(msg)` sees every SDK message.
     `on_episode(episode)` is called before the first tool call (e.g. to open a viewer); if it
     returns a callable, that runs once the episode is over. Raises RateLimited (after writing
     the log) if the subscription's usage limit cut it short."""
-    episode = make_episode(task, Tier(tier), seed, limits, fault=fault)
+    episode = make_episode(task, Tier(tier), seed, limits)
     after = on_episode(episode) if on_episode else None
     bridge = ToolBridge(episode)
-    prompt = system_prompt(episode.world.tier, warn=config.warn)
+    prompt = system_prompt(episode.world.tier)
     first = task_message(episode.task.instruction)
     recorder = EpisodeRecorder(episode, out_dir, agent={
         "kind": "claude-agent-sdk", "model": config.model, "effort": config.effort,
-        "max_usd": config.max_usd, "warn": warn_level(config.warn), "cli": config.cli,
+        "max_usd": config.max_usd, "cli": config.cli,
         "system_prompt": prompt, "first_message": first})
     max_calls = episode.dispatcher.ctx.budget.limits.max_calls or 40
     stderr: list[str] = []

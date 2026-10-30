@@ -76,7 +76,7 @@ class JointStateSensor(Sensor):
         d = world.data
         # Motor torque = servo torque + the gravity-compensation torque the controller added.
         tau = _read(d, self._tau) + d.qfrc_applied[self._dof]
-        return {"q": world.fault.encoders(_read(d, self._q)), "dq": _read(d, self._dq),
+        return {"q": _read(d, self._q), "dq": _read(d, self._dq),
                 "tau": tau, "gripper_width": float(_read(d, self._fingers).sum())}
 
 

@@ -61,9 +61,6 @@ def main():
     parser.add_argument("--model", default=DEFAULT_MODEL)
     parser.add_argument("--effort", default="medium", choices=["low", "medium", "high", "xhigh", "max"])
     parser.add_argument("--max-usd", type=float, default=2.0, help="hard cost stop for the session")
-    parser.add_argument("--fault", default="none", help="a core.faults preset, e.g. encoder_j1_5deg")
-    parser.add_argument("--warn", nargs="?", const="full", default="none", choices=["none", "mild", "full"],
-                        help="prompt warning arm: mild (the robot is not ideal) or full (may be miscalibrated; verify)")
     parser.add_argument("--say", action="append", default=[], help="scripted instruction (repeatable)")
     parser.add_argument("--no-viewer", action="store_true")
     parser.add_argument("--panels", action="store_true", help="show MuJoCo's side panels")
@@ -74,15 +71,11 @@ def main():
     tier = Tier(args.tier)
     task = PlaygroundTask() if args.task == "playground" else args.task
     out = PACKAGE_ROOT / "runs" / "live" / f"{args.task}-{tier.value}-s{args.seed}-{time.strftime('%Y%m%d-%H%M%S')}"
-    from pandawork.core.faults import FAULTS
     session = LiveSession(task, tier, args.seed, out,
-                          AgentConfig(model=args.model, effort=args.effort, max_usd=args.max_usd,
-                                      warn=args.warn),
-                          on_message=console_printer(args.quiet), fault=FAULTS[args.fault])
+                          AgentConfig(model=args.model, effort=args.effort, max_usd=args.max_usd),
+                          on_message=console_printer(args.quiet))
     print(f"Scene: {args.task} (seed {args.seed}, tier {tier.value}). Objects: "
           f"{', '.join(session.episode.world.objects)}")
-    if args.fault != "none":
-        print(f"Fault: {args.fault} ({FAULTS[args.fault].visibility}): {FAULTS[args.fault].describe()}")
     if args.task != "playground":
         print(f"Suggested instruction: {session.episode.task.instruction}")
     reader = make_reader(session, args.say)

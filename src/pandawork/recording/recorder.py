@@ -70,7 +70,6 @@ class EpisodeRecorder:
             "task": episode.task.name, "tier": world.tier.value, "seed": episode.seed,
             "instruction": episode.task.instruction, "objects": world.objects,
             "budget_limits": {k: getattr(limits, k) for k in limits.__dataclass_fields__},
-            "fault": world.fault.to_meta(),
             "harness_version": harness_version(), "agent": agent or {},
             "started_wall": time.time(), "timestep": world.timestep,
             "start_step": world.clock.step, "start_sim_time": world.clock.sim_time,

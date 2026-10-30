@@ -14,10 +14,10 @@ Everything between the `Robot description` and `end of robot description` marker
 | constant | meaning | who uses it |
 |---|---|---|
 | `PANDA_DIR`, `PANDA_SCENE` | the MJCF and meshes | `panda_spec()` |
-| `ARM_JOINTS` | the seven arm joint names | control, encoders, faults, IK |
+| `ARM_JOINTS` | the seven arm joint names | control, encoders, IK |
 | `ARM_JOINT_LIMITS` | joint ranges in radians | `check_reachable`, the IK's soft limits |
 | `FINGER_JOINTS` | the two finger joints | gripper width, finger state |
-| `TCP_SITE`, `TCP_OFFSET` | the fingertip-centre site and where it sits on the hand | IK, every motion report, faults |
+| `TCP_SITE`, `TCP_OFFSET` | the fingertip-centre site and where it sits on the hand | IK, every motion report |
 | `GRIPPER_OPEN`, `GRIPPER_CLOSED`, `GRIPPER_MAX_WIDTH`, `GRIPPER_STIFFNESS_SCALE` | the finger actuator's command range, the opening it produces, a servo gain multiplier | gripper tool, skills, `panda_spec()` |
 | `DOWN_QUAT`, `FORWARD_QUAT`, `POINTING`, `READY_FORWARD_DEG` | the two hand orientations the tools offer and the joint posture for the forward one | motion skills, the move tools |
 | `FT_SITE`, `WRIST_FORCE`, `WRIST_TORQUE`, `TOUCH_SENSORS` | wrist force/torque and finger touch sensor names | sensors, `read_wrist_ft`, the grasp check |
@@ -65,9 +65,6 @@ the MJCF's `home` keyframe.
   different tool, not a different constant.
 - **Gravity compensation from the self-model.** `apply_control` adds the self-model's gravity
   torques to the plant. Any arm the MJCF models with correct masses gets this for free.
-- **Faults are written against these names.** `core/faults.py` offsets an encoder on
-  `ARM_JOINTS[i]`, tilts a camera in `CAMERAS`, limits a joint range, and caps the gripper
-  width. They keep working as long as the names resolve.
 
 ## Acceptance check
 

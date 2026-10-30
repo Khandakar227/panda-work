@@ -1,8 +1,8 @@
 """Run a grid of episodes (tasks x tiers x seeds), resumably and under a total spending cap.
 
-Each episode gets its own folder <run>/<task>-<tier>[-f_<fault>][-warn|-warnmild]-s<seed>/. A finished
+Each episode gets its own folder <run>/<task>-<tier>-s<seed>/. A finished
 episode (with result.json) is never re-run, so an interrupted batch continues where it stopped.
-Episodes run grouped by tier and prompt variant: the system prompt and tool list stay in Claude
+Episodes run grouped by tier: the system prompt and tool list stay in Claude
 Code's 1-hour prompt cache between consecutive episodes, which lowers cost. When the Claude
 subscription's usage limit is hit mid-episode, that episode is set aside, the batch sleeps until
 the limit resets, and the episode is re-run.
@@ -11,14 +11,12 @@ import asyncio
 import json
 import shutil
 import time
-from dataclasses import dataclass, replace
+from dataclasses import dataclass
 from pathlib import Path
-from typing import Collection, Callable, Iterator
+from typing import Callable, Iterator
 
-from ..agent.prompt import warn_level
 from ..agent import AgentConfig, run_agent_episode
 from ..agent.session import RateLimited
-from ..core.faults import FAULTS
 from ..recording import EpisodeRecorder
 from ..tasks import make_episode
 from ..tiers import Tier
@@ -33,28 +31,15 @@ class Job:
     task: str
     tier: Tier
     seed: int
-    fault: str = "none"   # a core.faults preset name
-    warn: str = "none"    # prompt warning arm: "none" | "mild" | "full" (see agent.prompt.WARNINGS)
-
-    def __post_init__(self):
-        object.__setattr__(self, "warn", warn_level(self.warn))
 
     @property
     def name(self) -> str:
-        return (f"{self.task}-{self.tier.value}" + (f"-f_{self.fault}" if self.fault != "none" else "")
-                + WARN_SUFFIX[self.warn] + f"-s{self.seed}")
+        return f"{self.task}-{self.tier.value}-s{self.seed}"
 
 
-WARN_SUFFIX = {"none": "", "full": "-warn", "mild": "-warnmild"}
-
-
-def grid(tasks: list[str], tiers: list[Tier], seeds: list[int], faults=("none",),
-         warn=("none",), exclude: Collection[tuple[str, str]] = ()) -> list[Job]:
-    """Tier-major order (cache stays warm), then prompt variant, fault, task, seed.
-    `exclude`: (task, fault) cells to leave out, e.g. a fault that makes a task unreachable."""
-    exclude = set(exclude)
-    return [Job(t, tier, s, f, w) for tier in tiers for w in warn for f in faults for t in tasks
-            for s in seeds if (t, f) not in exclude]
+def grid(tasks: list[str], tiers: list[Tier], seeds: list[int]) -> list[Job]:
+    """Tier-major order (cache stays warm), then task, then seed."""
+    return [Job(t, tier, s) for tier in tiers for t in tasks for s in seeds]
 
 
 def set_aside(folder: Path) -> bool:
@@ -83,7 +68,7 @@ def pending(run_dir: Path, jobs: list[Job]) -> Iterator[Job]:
 
 def run_oracle(job: Job, folder: Path, limits: BudgetLimits | None = None,
                on_episode: Callable | None = None) -> Path:
-    episode = make_episode(job.task, job.tier, job.seed, limits, fault=FAULTS[job.fault])
+    episode = make_episode(job.task, job.tier, job.seed, limits)
     after = on_episode(episode) if on_episode else None
     recorder = EpisodeRecorder(episode, folder, agent={"kind": "oracle"})
     try:
@@ -113,15 +98,10 @@ def run_grid(run_dir: Path, jobs: list[Job], agent: str = "claude",
         "agent": agent, "model": config.model, "effort": config.effort,
         "max_usd_per_episode": config.max_usd, "max_total_usd": max_total_usd,
         "budget_limits": {k: getattr(limits, k) for k in limits.__dataclass_fields__},
-        "faults": sorted({j.fault for j in jobs}, key=[j.fault for j in jobs].index),
-        "warn": sorted({j.warn for j in jobs}, key=["none", "mild", "full"].index),
         "jobs": [j.name for j in jobs]}, indent=2))
     done = []
     todo = list(pending(run_dir, jobs))
     report(f"{len(jobs) - len(todo)} of {len(jobs)} episodes already finished; {len(todo)} to run")
-    for name in dict.fromkeys(j.fault for j in todo):
-        if name != "none":
-            report(f"fault {name} ({FAULTS[name].visibility}): {FAULTS[name].describe()}")
     for i, job in enumerate(todo, 1):
         spent = spent_usd(run_dir)
         if spent >= max_total_usd:
@@ -134,8 +114,7 @@ def run_grid(run_dir: Path, jobs: list[Job], agent: str = "claude",
                 path = run_oracle(job, folder, limits, on_episode)
             else:
                 path = asyncio.run(run_agent_episode(job.task, job.tier, job.seed, folder,
-                                                     replace(config, warn=job.warn), limits,
-                                                     fault=FAULTS[job.fault], on_episode=on_episode))
+                                                     config, limits, on_episode=on_episode))
         except RateLimited as exc:  # not the agent's doing: set aside, wait, re-run
             if folder.exists():
                 folder.rename(folder.with_name(f"{folder.name}.incomplete-ratelimit-{time.strftime('%H%M%S')}"))

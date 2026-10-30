@@ -1,8 +1,9 @@
-"""The public repo carries no vocabulary from the study it was extracted from."""
+"""The public repo carries no vocabulary from the study it was extracted from, and no trace of
+the fault layer that was removed from it."""
 import re
 from pathlib import Path
 
-BANNED = ("misfit", "grid2", "pilot", r"\bm7\b", "judge_check")
+BANNED = ("misfit", "grid2", "pilot", r"\bm7\b", "judge_check", r"\bfaults?\b", r"\bmiscalibrat")
 SKIP_DIRS = {".git", ".venv", "__pycache__", "runs", "outputs", ".pytest_cache", ".superpowers"}
 SKIP_PATHS = {Path("docs") / "superpowers"}
 PATTERN = re.compile("|".join(BANNED), re.IGNORECASE)

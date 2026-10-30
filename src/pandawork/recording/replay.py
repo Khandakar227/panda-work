@@ -14,7 +14,6 @@ from typing import Any, Callable
 import numpy as np
 from PIL import Image
 
-from ..core.faults import fault_from_meta
 from ..tasks import make_episode
 from ..tiers import Tier
 from ..tools import BudgetLimits, ToolCall
@@ -109,7 +108,7 @@ def replay(log: EpisodeLog, on_world: Callable | None = None,
     and may return a callable that is run on the finished episode before its world is closed."""
     meta = log.meta
     ep = make_episode(meta["task"], Tier(meta["tier"]), meta["seed"],
-                      BudgetLimits(**meta["budget_limits"]), fault=fault_from_meta(meta))
+                      BudgetLimits(**meta["budget_limits"]))
     if on_world:
         on_world(ep.world)
     at_end = on_episode(ep) if on_episode else None

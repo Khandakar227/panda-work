@@ -297,23 +297,19 @@ def test_reported_costs_are_used_and_unknown_models_never_crash():
     assert ledger.unpriced == {"claude-unknown-9"}
 
 
-def test_overlay_names_the_fault_and_marks_believed_and_true_fingertips():
-    from pandawork.core.faults import FAULTS
+def test_overlay_panel_and_target_marker():
     from pandawork.tasks.base import call
     from pandawork.watch import ViewerOverlay
-    episode = make_episode("pick_place", seed=0, fault=FAULTS["encoder_j1_5deg"])
+    episode = make_episode("pick_place", seed=0)
     viewer = FakeViewer(episode.world.plant)
     overlay = ViewerOverlay(viewer, episode, realtime=0)
     call(episode.dispatcher, ("move_to", {"x": 0.5, "y": 0.1, "z": 0.2}))
     overlay.draw()
     _, _, labels, values = viewer.texts
-    assert "Fault" in labels and "encoder_j1_5deg (hidden)" in values and "Hand" in labels
+    assert "Episode" in labels and "Doing" in labels and "Budget" in labels
+    assert "Hand" not in labels
     scn = viewer.user_scn
-    assert scn.ngeom == 3 and [g.label for g in scn.geoms[:3]] == ["", "believed", "true"]
-    believed, true = overlay.fingertips()
-    assert 0.02 < np.linalg.norm(true - believed) < 0.08  # the 5 deg offset, a few cm at the hand
-    assert list(scn.geoms[2].pos) == pytest.approx(list(true))
-    assert "4." in values or "5." in values  # the live distance is on the panel
+    assert scn.ngeom == 1 and list(scn.geoms[0].pos) == pytest.approx([0.5, 0.1, 0.2])  # the move_to target
     episode.world.close()
 
 
@@ -321,10 +317,10 @@ def test_run_oracle_calls_the_episode_hook_and_its_cleanup(tmp_path):
     from pandawork.evaluation.batch import Job, run_oracle
     seen = []
     def on_episode(episode):
-        seen.append(("start", episode.task.name, episode.world.fault.name))
+        seen.append(("start", episode.task.name))
         return lambda: seen.append(("end",))
-    run_oracle(Job("reach", Tier.PRIVILEGED, 0, "fingertip_1cm_long"), tmp_path / "ep", on_episode=on_episode)
-    assert seen == [("start", "reach", "fingertip_1cm_long"), ("end",)]
+    run_oracle(Job("reach", Tier.PRIVILEGED, 0), tmp_path / "ep", on_episode=on_episode)
+    assert seen == [("start", "reach"), ("end",)]
     assert (tmp_path / "ep" / "result.json").exists()
 
 
@@ -349,7 +345,7 @@ def test_overlay_shows_what_claude_says_from_the_bus():
 
 def test_agent_cwd_never_names_the_episode(tmp_path):
     """Claude Code shows the model its working directory, so the episode folder (whose name
-    carries the fault label) must never be the cwd."""
+    carries the task, tier and seed, and an experiment's condition) must never be the cwd."""
     from pandawork.agent.session import AgentConfig, claude_options, neutral_cwd
     episode_dir = tmp_path / "stack-vision_only-f_top_cam_2deg-s1"
     episode_dir.mkdir()

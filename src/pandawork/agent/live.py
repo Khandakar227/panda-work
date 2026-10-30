@@ -17,7 +17,7 @@ from ..tasks import Task, make_episode
 from ..tiers import Tier
 from ..tools import BudgetLimits
 from .bridge import ToolBridge
-from .prompt import system_prompt, warn_level
+from .prompt import system_prompt
 from .session import AgentConfig, MessageLog, claude_options
 
 LIVE_NOTE = ("\n\nThis is an interactive session. A person gives you instructions one at a time. "
@@ -29,15 +29,14 @@ SESSION_LIMITS = BudgetLimits(max_calls=None, max_sim_seconds=None)
 class LiveSession:
     def __init__(self, task: str | Task, tier: Tier, seed: int, out_dir: Path,
                  config: AgentConfig = AgentConfig(),
-                 on_message: Callable[[Any], None] | None = None, fault=None):
-        from ..core.faults import NO_FAULT
-        self.episode = make_episode(task, Tier(tier), seed, SESSION_LIMITS, fault=fault or NO_FAULT)
+                 on_message: Callable[[Any], None] | None = None):
+        self.episode = make_episode(task, Tier(tier), seed, SESSION_LIMITS)
         self.bridge = ToolBridge(self.episode)
         self.config = config
-        self.prompt = system_prompt(self.episode.world.tier, warn=config.warn) + LIVE_NOTE
+        self.prompt = system_prompt(self.episode.world.tier) + LIVE_NOTE
         self.recorder = EpisodeRecorder(self.episode, out_dir, agent={
             "kind": "claude-agent-sdk-live", "model": config.model, "effort": config.effort,
-            "max_usd": config.max_usd, "warn": warn_level(config.warn), "cli": config.cli,
+            "max_usd": config.max_usd, "cli": config.cli,
             "system_prompt": self.prompt})
         self.log = MessageLog(self.episode, self.bridge, config.model)
         self.overlay: ViewerOverlay | None = None

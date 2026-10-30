@@ -13,7 +13,6 @@ from typing import Any, ClassVar
 import mujoco
 import numpy as np
 
-from ..core.faults import NO_FAULT, Fault
 from ..core.robot import panda_spec
 from ..tools import Dispatcher, ToolCall
 from ..world import World
@@ -56,10 +55,9 @@ class Task(ABC):
         """The scene shared by every episode of this task (layout is randomised in reset)."""
 
     @classmethod
-    def models(cls, fault: Fault = NO_FAULT) -> tuple[mujoco.MjModel, mujoco.MjModel]:
-        """(self_model, plant), compiled once per task class and fault. The fault patches the
-        plant only: the self-model is always the nominal arm."""
-        return _compile(cls, fault)
+    def models(cls) -> tuple[mujoco.MjModel, mujoco.MjModel]:
+        """(self_model, plant), compiled once per task class."""
+        return _compile(cls)
 
     @abstractmethod
     def reset(self, world: World, rng: np.random.Generator) -> None:
@@ -92,9 +90,8 @@ class Task(ABC):
 
 
 @lru_cache(maxsize=None)
-def _compile(task_cls, fault: Fault) -> tuple[mujoco.MjModel, mujoco.MjModel]:
+def _compile(task_cls) -> tuple[mujoco.MjModel, mujoco.MjModel]:
     plant_spec = task_cls.build_spec()
-    fault.patch_spec(plant_spec)
     return panda_spec().compile(), plant_spec.compile()
 
 

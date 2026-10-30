@@ -1,7 +1,6 @@
 """Aggregate a batch of episodes into a report: success and progress with confidence intervals,
-how well Claude's claims match the world, effort, cost, side effects, which tools it used, and
-(when analysis.py has run) how it responded to a faulty body. Also episodes.csv, one row per
-episode, for plotting."""
+how well the agent's claims match the world, effort, cost, side effects, and which tools it
+used. Also episodes.csv, one row per episode, for plotting."""
 import csv
 import json
 import math
@@ -40,14 +39,10 @@ class EpisodeRow:
     tools: Counter = field(default_factory=Counter)
     images: int = 0
     budget_exhausted: bool = False
-    fault: str = "none"
-    warn: str = "none"
     progress: float = 0.0          # the task's partial score, 0..1 (= success when it has none)
     disturbed: int = 0             # bystander objects moved by more than 1 cm
     bystander_contact_s: float = 0.0
     peak_force: float | None = None
-    analysis: dict | None = None   # analysis.json, when scripts/analyze.py has run
-    judge: dict | None = None      # judge.json
 
 
 def load_rows(run_dir: Path) -> list[EpisodeRow]:
@@ -67,7 +62,6 @@ def load_rows(run_dir: Path) -> list[EpisodeRow]:
                 images += e["data"].get("n_images", 0)
         sdk = r.get("sdk_result") or {}
         side = r.get("side_effects") or {}
-        analysis = _optional_json(folder / "analysis.json")
         rows.append(EpisodeRow(
             task=meta["task"], tier=meta["tier"], seed=meta["seed"], success=r["success"],
             claimed=r.get("agent_claimed_success"), turns=r["usage"]["turns"],
@@ -75,18 +69,11 @@ def load_rows(run_dir: Path) -> list[EpisodeRow]:
             wall_s=(sdk.get("duration_ms") or 0) / 1000 or None, cost=r["usage"]["cost_usd"],
             metric=_metric(meta["task"], r["metrics"], meta), tools=tools, images=images,
             budget_exhausted=bool(r.get("budget_exhausted")),
-            fault=(meta.get("fault") or {}).get("name", "none"),
-            warn=_warn_level((meta.get("agent") or {}).get("warn")),
             progress=float(r.get("progress", float(r["success"]))),
             disturbed=len(side.get("disturbed") or {}),
             bystander_contact_s=sum((side.get("bystander_contact_s") or {}).values()),
-            peak_force=side.get("peak_wrist_force_N"),
-            analysis=analysis, judge=_optional_json(folder / "judge.json") or (analysis or {}).get("judge")))
+            peak_force=side.get("peak_wrist_force_N")))
     return rows
-
-
-def _optional_json(path: Path) -> dict | None:
-    return json.loads(path.read_text()) if path.exists() else None
 
 
 def _metric(task: str, metrics: dict, meta: dict) -> float | None:
@@ -149,46 +136,13 @@ class Group:
             "mean_bystander_contact_s": mean(r.bystander_contact_s for r in rows) if rows else 0.0,
             "mean_peak_force": (mean(r.peak_force for r in rows if r.peak_force is not None)
                                 if any(r.peak_force is not None for r in rows) else None),
-            **self.response_summary(),
-        }
-
-    def response_summary(self) -> dict:
-        """The fault-response measures (analysis.py), pooled over the group's episodes."""
-        an = [r.analysis for r in self.rows if r.analysis]
-        if not an:
-            return {}
-        rate = lambda num, den: (sum(a[num] for a in an) / sum(a[den] for a in an)
-                                 if sum(a[den] for a in an) else None)
-        with_error = [a for a in an if (a.get("hand_error_cm") or 0) >= 2.0]  # a fault that bit
-        judged = [r.judge for r in self.rows if r.judge]
-        errs = [a["hand_error_cm"] for a in an if a.get("hand_error_cm") is not None]
-        ratios = [a["calls_vs_oracle"] for a in an if a.get("calls_vs_oracle")]
-        return {
-            "analysed": len(an),
-            "mean_hand_error_cm": mean(errs) if errs else None,
-            "verify_after_reached_rate": rate("verify_after_reached", "reached"),
-            "verify_after_failure_rate": rate("verify_after_failure", "failures"),
-            "grasp_failures_per_episode": mean(a["grasp_failures"] for a in an),
-            "compensated": sum(a["compensated"] for a in with_error),
-            "compensable": len(with_error),
-            "judged": len(judged),
-            "noticed_discrepancy": sum(j["noticed_discrepancy"] for j in judged),
-            "suspected_robot": sum(j["suspected_robot"] for j in judged),
-            "mean_calls_vs_oracle": mean(ratios) if ratios else None,
         }
 
 
 def groups(rows: list[EpisodeRow]) -> dict[str, list[Group]]:
     by = lambda key: [Group(k, v) for k, v in sorted(_bucket(rows, key).items())]
-    out = {"task_tier": by(lambda r: f"{r.task} / {r.tier}"), "tier": by(lambda r: r.tier),
-           "task": by(lambda r: r.task), "all": [Group("all", rows)]}
-    if len({r.fault for r in rows}) > 1:
-        out["fault"] = by(lambda r: r.fault)
-        out["fault_tier"] = by(lambda r: f"{r.fault} / {r.tier}")
-        out["task_fault"] = by(lambda r: f"{r.task} / {r.fault}")
-    if len({r.warn for r in rows}) > 1:
-        out["warn_fault"] = by(lambda r: f"{WARN_LABEL[r.warn]} / {r.fault}")
-    return out
+    return {"task_tier": by(lambda r: f"{r.task} / {r.tier}"), "tier": by(lambda r: r.tier),
+            "task": by(lambda r: r.task), "all": [Group("all", rows)]}
 
 
 def _bucket(rows, key):
@@ -221,40 +175,10 @@ def render_markdown(run_dir: Path, rows: list[EpisodeRow]) -> str:
                 f"${s['mean_cost']:.3f} | {cps} | {metric} | {s['disturbed_episodes']} |")
         lines.append("")
 
-    def response_table(title, groups_):
-        lines.extend([f"## {title}", "",
-                      "| group | n | hand error | verify after reached | verify after failure | grasp misses/ep | compensated | noticed (said) | suspected robot | calls vs oracle |",
-                      "|---|---|---|---|---|---|---|---|---|---|"])
-        pct = lambda v: "-" if v is None else f"{v:.0%}"
-        for grp in groups_:
-            s = grp.summary()
-            if not s.get("analysed"):
-                continue
-            err = f"{s['mean_hand_error_cm']:.1f} cm" if s["mean_hand_error_cm"] is not None else "-"
-            judged = s["judged"]
-            lines.append(
-                f"| {s['group']} | {s['analysed']} | {err} | {pct(s['verify_after_reached_rate'])} | "
-                f"{pct(s['verify_after_failure_rate'])} | {s['grasp_failures_per_episode']:.2f} | "
-                f"{s['compensated']}/{s['compensable']} | "
-                f"{s['noticed_discrepancy']}/{judged} | {s['suspected_robot']}/{judged} | "
-                + (f"{s['mean_calls_vs_oracle']:.1f}x |" if s["mean_calls_vs_oracle"] else "- |"))
-        lines.append("")
-
     table("By tier", g["tier"])
     table("By task", g["task"])
     table("By task and tier", g["task_tier"])
-    if "fault" in g:
-        table("By fault", g["fault"])
-        table("By fault and tier", g["fault_tier"])
-        table("By task and fault", g["task_fault"])
-    if "warn_fault" in g:
-        table("By warning and fault", g["warn_fault"])
     table("Overall", g["all"])
-    if any(r.analysis for r in rows):
-        response_table("Fault response, by " + ("fault and tier" if "fault_tier" in g else "tier"),
-                       g.get("fault_tier", g["tier"]))
-        if "warn_fault" in g:
-            response_table("Fault response, by warning and fault", g["warn_fault"])
     tool_use = defaultdict(Counter)
     for r in rows:
         tool_use[r.tier].update(r.tools)
@@ -269,51 +193,24 @@ def render_markdown(run_dir: Path, rows: list[EpisodeRow]) -> str:
     lines.extend(["", "Key metrics: " + "; ".join(f"{t}: {v[1]} ({v[2]})" for t, v in KEY_METRIC.items()),
                   "Over-claim: the agent called done claiming success, but the world check failed.",
                   "Progress: the task's partial score (0..1). Disturbed: episodes in which an object "
-                  "the task is not about moved by over 1 cm.",
-                  "Fault response: hand error = |true - reported fingertip| after motions; verify = "
-                  "a look/detect before committing to a position again; compensated = an approach "
-                  "aimed >= 1 cm and >= a quarter of the hand error in the cancelling direction "
-                  "(counted over episodes where the error was >= 2 cm); noticed/suspected from the "
-                  "judge's reading of the transcript.", ""])
+                  "the task is not about moved by over 1 cm.", ""])
     return "\n".join(lines)
 
 
-WARN_LABEL = {"none": "not warned", "mild": "warned (mild)", "full": "warned (full)"}
-WARN_SUFFIX = {"none": "", "full": "-warn", "mild": "-warnmild"}
-
-
-def _warn_level(value) -> str:
-    """Episode logs recorded True/False before the mild arm existed."""
-    if value is True:
-        return "full"
-    if not value:
-        return "none"
-    return str(value)
-
-
-CSV_FIELDS = ["episode", "task", "tier", "fault", "warn", "seed", "success", "progress", "claimed",
+CSV_FIELDS = ["episode", "task", "tier", "seed", "success", "progress", "claimed",
               "turns", "calls", "images", "sim_s", "wall_s", "cost", "metric", "budget_exhausted",
               "disturbed", "bystander_contact_s", "peak_force"]
-ANALYSIS_FIELDS = ["hand_error_cm", "hand_error_max_cm", "detection_error_cm", "reached",
-                   "verify_after_reached", "failures", "verify_after_failure", "grasp_attempts",
-                   "grasp_failures", "compensated", "first_compensated_call",
-                   "best_compensation_frac", "final_true_miss_cm", "oracle_calls", "calls_vs_oracle"]
-JUDGE_FIELDS = ["noticed_discrepancy", "blamed", "suspected_robot", "quote"]
 
 
 def write_csv(run_dir: Path, rows: list[EpisodeRow]) -> Path:
-    """episodes.csv: one row per episode, with the analysis and judge columns when present."""
+    """episodes.csv: one row per episode."""
     path = Path(run_dir) / "episodes.csv"
     with open(path, "w", newline="") as f:
-        w = csv.DictWriter(f, fieldnames=CSV_FIELDS + ANALYSIS_FIELDS + [f"judge_{k}" for k in JUDGE_FIELDS])
+        w = csv.DictWriter(f, fieldnames=CSV_FIELDS)
         w.writeheader()
         for r in rows:
-            a, j = r.analysis or {}, r.judge or {}
             row = {k: getattr(r, k) for k in CSV_FIELDS if hasattr(r, k)}
-            row["episode"] = f"{r.task}-{r.tier}" + (f"-f_{r.fault}" if r.fault != "none" else "") + \
-                             WARN_SUFFIX[r.warn] + f"-s{r.seed}"
-            row.update({k: a.get(k) for k in ANALYSIS_FIELDS})
-            row.update({f"judge_{k}": j.get(k) for k in JUDGE_FIELDS})
+            row["episode"] = f"{r.task}-{r.tier}-s{r.seed}"
             w.writerow(row)
     return path
 

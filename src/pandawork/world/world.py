@@ -15,7 +15,6 @@ import mujoco
 import numpy as np
 
 from ..core.control import apply_control
-from ..core.faults import NO_FAULT, Fault
 from ..core.ik import SelfModel
 from ..core.render import Cameras
 from ..core.robot import ARM_JOINTS, FINGER_JOINTS, GRIPPER_OPEN, arm_indices, build_models
@@ -29,14 +28,11 @@ from .sensors import Sensor, default_sensors
 class World:
     def __init__(self, plant: mujoco.MjModel | None = None, self_model: mujoco.MjModel | None = None,
                  *, tier: Tier = Tier.PRIVILEGED, seed: int = 0,
-                 sensors: list[Sensor] | None = None, wall_clock: Callable[[], float] = time.time,
-                 fault: Fault = NO_FAULT):
+                 sensors: list[Sensor] | None = None, wall_clock: Callable[[], float] = time.time):
         if plant is None or self_model is None:
             self_model, plant = build_models(with_target=False)
         self.plant = plant
         # How the body differs from the belief: shapes the encoder readings and the servo
-        # commands here; geometry faults were already compiled into `plant`.
-        self.fault = fault
         self.belief = SelfModel(self_model)
         self.data = mujoco.MjData(plant)
         self.qadr, self.dof = arm_indices(plant)
@@ -114,7 +110,7 @@ class World:
     def step(self, n: int = 1) -> None:
         for _ in range(n):
             stamp = (self.clock.sim_time, self.clock.step)
-            apply_control(self.plant, self.data, self.belief, self.fault.command(self.q_cmd),
+            apply_control(self.plant, self.data, self.belief, self.q_cmd,
                           self.gripper, q_measured=self.encoders())
             mujoco.mj_step(self.plant, self.data)
             self.clock.advance(self.data.time)
@@ -125,9 +121,9 @@ class World:
                 hook(self)
 
     def encoders(self) -> np.ndarray:
-        """The arm joint angles as the robot's encoders report them (true angles through the
-        fault, if any). Everything the robot computes about itself starts here."""
-        return self.fault.encoders(self.data.qpos[self.qadr])
+        """The arm joint angles as the robot's encoders report them. Everything the robot computes
+        about itself starts here."""
+        return self.data.qpos[self.qadr].copy()
 
     def capture(self, name: str) -> Message:
         """Publish an on-demand reading of the current state (e.g. a camera image)."""
@@ -151,26 +147,13 @@ class World:
         self.data.qvel[dadr:dadr + 6] = 0.0
         mujoco.mj_forward(self.plant, self.data)
 
-    def fork(self, as_believed: mujoco.MjModel | None = None) -> "World":
+    def fork(self) -> "World":
         """An independent copy at the current instant: same models, copied state, history and
-        noise streams, no subscribers. Used to predict "what would happen if".
-
-        `as_believed`: the nominal (fault-free) plant model. The twin is then what the robot
-        *believes* the world is: nominal body, arm at the encoder readings, no fault. A
-        prediction tool must use this, or it would reveal the fault."""
+        noise streams, no subscribers. Used to predict "what would happen if"."""
         twin = object.__new__(World)
         twin.qadr, twin.dof = self.qadr, self.dof
         twin.belief = SelfModel(self.belief.model)
-        if as_believed is None or self.fault is NO_FAULT:
-            twin.plant, twin.data, twin.fault = self.plant, copy.copy(self.data), self.fault
-        else:
-            twin.plant, twin.data, twin.fault = as_believed, mujoco.MjData(as_believed), NO_FAULT
-            spec = mujoco.mjtState.mjSTATE_INTEGRATION
-            state = np.empty(mujoco.mj_stateSize(self.plant, spec))
-            mujoco.mj_getState(self.plant, self.data, state, spec)
-            mujoco.mj_setState(as_believed, twin.data, state, spec)
-            twin.data.qpos[self.qadr] = self.encoders()
-            mujoco.mj_forward(as_believed, twin.data)
+        twin.plant, twin.data = self.plant, copy.copy(self.data)
         twin.tier, twin.seed = self.tier, self.seed
         twin.clock = self.clock.copy()
         twin.bus = self.bus.fork(twin.clock)

@@ -468,10 +468,7 @@ class Simulate(Tool):
             if tool is None or tool.group is not Group.ACT:
                 raise ToolError("not_simulatable", f"{a.tool!r} is not an action tool",
                                 hint="simulate only move_to, move_relative, gripper, move_joints, wait")
-        # Predict on what the robot believes: the nominal body (a fault in the real one must
-        # not leak through a perfect copy of it), at the encoder readings.
-        nominal = ctx.task.models()[1] if ctx.task is not None else None
-        twin = ctx.world.fork(as_believed=nominal)
+        twin = ctx.world.fork()
         try:
             sub = Dispatcher(self.registry, ToolContext(
                 world=twin, budget=Budget(BudgetLimits(max_calls=None, max_sim_seconds=None),

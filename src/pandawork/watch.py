@@ -1,11 +1,7 @@
 """Watching episodes in MuJoCo's passive viewer: a text panel and markers over the scene.
 
 The panel shows the instruction, what Claude last said, the current tool call and its result,
-the budget, and the fault: its preset name and a one-line description, plus the live distance
-between where the robot believes its fingertip is and where it really is. Two labelled spheres
-mark those points ("believed" green, "true" red) when a fault is active. The believed point
-is computed from the encoder readings with a private copy of the self-model, so watching never
-touches the robot's own belief state.
+and the budget; a green sphere marks the current move_to target.
 
 `Watch` is an `on_episode` hook for `run_agent_episode`, `run_oracle` and `run_grid`: it opens
 the viewer when an episode starts and closes it when the episode ends. Closing the window by
@@ -19,13 +15,8 @@ from typing import Any, Callable
 import mujoco
 import numpy as np
 
-from .core.ik import SelfModel
-from .core.faults import NO_FAULT
-from .core.robot import TCP_SITE, site_pose
 
 TARGET_RGBA = np.array([0.1, 0.8, 0.4, 0.55])
-BELIEVED_RGBA = np.array([0.1, 0.9, 0.2, 0.9])
-TRUE_RGBA = np.array([0.95, 0.15, 0.1, 0.9])
 DEFAULT_VIEW = {"lookat": (0.45, 0.0, 0.10), "distance": 1.55, "azimuth": 150.0, "elevation": -28.0}
 
 
@@ -59,14 +50,12 @@ def _sphere(geom, pos, radius: float, rgba, label: str = "") -> None:
 
 class ViewerOverlay:
     """Drives the passive viewer from the simulation thread: real-time pacing, the text panel
-    and the markers (move_to target; believed and true fingertip under a fault)."""
+    and the move_to target marker."""
 
     def __init__(self, viewer, episode, realtime: float = 1.0):
         self.viewer = viewer
         self.episode = episode
         self.realtime = realtime
-        self.fault = episode.world.fault
-        self._belief = SelfModel(episode.world.belief.model) if self.fault is not NO_FAULT else None
         self.state = {"you": "", "claude": "waiting for your instruction", "doing": "",
                       "result": "", "target": None}
         self._pace = (time.perf_counter(), episode.world.clock.sim_time)
@@ -121,25 +110,12 @@ class ViewerOverlay:
         if ahead > 0:
             time.sleep(ahead)
 
-    def fingertips(self) -> tuple[np.ndarray, np.ndarray]:
-        """(believed, true) fingertip positions right now; simulator truth, for the display only."""
-        world = self.episode.world
-        believed = self._belief.fk(world.encoders())[0]
-        mujoco.mj_kinematics(world.plant, world.data)
-        return believed, site_pose(world.plant, world.data, TCP_SITE)[0]
-
     def rows(self) -> list[tuple[str, str]]:
         s = self.state
         world = self.episode.world
         rows = [("Episode", f"{self.episode.task.name} · {world.tier.value} · seed {self.episode.seed}"),
                 ("You", s["you"]), ("Claude", s["claude"]), ("Doing", s["doing"]),
-                ("Result", s["result"]), ("Budget", self.episode.dispatcher.ctx.budget.footer()),
-                ("Fault", self.fault.name if self.fault is NO_FAULT
-                 else f"{self.fault.name} ({self.fault.visibility}): {self.fault.describe()}")]
-        if self._belief is not None:
-            believed, true = self.fingertips()
-            rows.append(("Hand", f"true fingertip {np.linalg.norm(true - believed) * 100:.1f} cm "
-                                 f"from where the robot believes it is"))
+                ("Result", s["result"]), ("Budget", self.episode.dispatcher.ctx.budget.footer())]
         return rows
 
     def draw(self) -> None:
@@ -153,11 +129,6 @@ class ViewerOverlay:
         if self.state["target"] is not None:
             _sphere(scn.geoms[n], self.state["target"], 0.012, TARGET_RGBA)
             n += 1
-        if self._belief is not None:
-            believed, true = self.fingertips()
-            _sphere(scn.geoms[n], believed, 0.008, BELIEVED_RGBA, "believed")
-            _sphere(scn.geoms[n + 1], true, 0.008, TRUE_RGBA, "true")
-            n += 2
         scn.ngeom = n
         self.viewer.sync()
 

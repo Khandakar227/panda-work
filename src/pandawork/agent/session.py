@@ -25,7 +25,6 @@ class AgentConfig:
     model: str = DEFAULT_MODEL
     effort: str = "medium"       # low | medium | high | xhigh | max
     max_usd: float = 1.0         # hard stop, enforced by Claude Code
-    warn: str | bool = "none"    # prompt warning arm: "none" | "mild" | "full" (True = full)
     cli_path: str | None = None  # default: the `claude` on PATH
 
     @property
@@ -37,8 +36,8 @@ def neutral_cwd() -> Path:
     """An empty directory with a bland name for the agent's working directory.
 
     Claude Code tells the model its working directory, so the episode folder must never be used:
-    its name carries the task, the tier and the fault label (e.g. stack-vision_only-f_top_cam_2deg-s1),
-    and agents have been seen quoting their working directory ("the task name f_encoder_j1_5deg")."""
+    its name carries the task, the tier and the seed, and agents have been seen quoting their
+    working directory; an experiment's condition must not reach the agent that way."""
     cwd = Path(tempfile.gettempdir()) / "robot-session"
     cwd.mkdir(exist_ok=True)
     return cwd
